@@ -1,18 +1,13 @@
 package test;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
-import java.util.*;
-
-import message.Message;
 
 import test.Byzantine_OM.faultyType;
-import tree.NodeData;
 import tree.TreeNode;
 
 import java.net.MalformedURLException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.Naming;
-import java.rmi.NotBoundException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +19,7 @@ public class Start_main {
 	private TreeNode decision_tree;
 	private static faultyType fault = faultyType.RAN;
 	private static int numfaulty = 3;
-	private static int numProcess = 20; 
+	private static int numProcess = 9; 
 	
 	
 	
@@ -116,22 +111,7 @@ public class Start_main {
 			} catch (RemoteException e) {
 				e.printStackTrace();
 			}
-		}
-		
-		try {
-			Byzantine_OM_Interface process0 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process0");
-			Byzantine_OM_Interface process1 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process1");
-			Byzantine_OM_Interface process2 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process2");
-			Byzantine_OM_Interface process3 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process3");
-			
-			//new Thread(process0).start();
-			
-		} catch (MalformedURLException | RemoteException | NotBoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		
+		}			
 	}
 }
 

@@ -4,8 +4,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-import message.Message.type;
-
 public class Message implements Serializable{
 	
 	/**

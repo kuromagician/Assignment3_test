@@ -7,13 +7,10 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 import tree.NodeData;
 import tree.TreeNode;
-
-import java.rmi.*;
 
 import message.Message;
 import message.Message.type;
@@ -37,55 +34,87 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 	//decision list
 	private TreeNode decision_tree;	
 	
+	//default value for the order
 	private boolean defaultOrder = true;
 	
+	//number of faulty processes
 	private int numfaulty;
 	
+	//indicate how many to be received for ACK
 	private int numToReceive;
 	
+	//indicate how many real messages to be received 
 	private int numExpected = 1;
 	
-	private int numSend;
-	
+	//indicate current round
 	private int round = 0;
 	
+	//lock for the shared variable
 	private byte[]  lock= new byte[0];
 	
-	private long pre_time;
+	//the time last message arrives
+	private long pre_time_MSG;
 	
+	//the time last ACK arrives
+	private long pre_time_ACK;
+	
+	//get the object 
 	private final Byzantine_OM outer = this;
 	
+	//flag that synchronize the execution
 	private boolean set = false;
 	
+	//the number of messages received
 	private int counter = 0;
 	
+	//the number of messages sent
 	private int sendCounter = 0;
 	
+	//fault type
 	public enum faultyType {NOR, AFK, RAN}; 
 	
 	private faultyType fault; 
 	
+	//last count fot false
+	private int finalCon = 0;
+	
+	//last count for true
+	private int finalPro = 0;
+	
+	//
+	private boolean finalDecision; 
+	
+	//constructor
 	public Byzantine_OM (List<String> urls, int index, faultyType fault) throws RemoteException{
 			//get the processes' list
 			this.urls = urls;
+			
 			//get the index of this process
 			this.index = index;
+			
 			//get the total number of processes
 			this.numProcesses = urls.size();
 			
+			//get total number of processes
 			this.numToReceive = this.numProcesses;
 			
+			//get it's fault type
 			this.fault = fault;
 	}
 	
 
 	
-
+	/**
+	 * start a new thread to process the incoming message
+	 */
 	public void receive(Message msg, int setDelay) throws RemoteException {
 		new Thread(new receiveProcess(msg, setDelay)).start();
-		//new Thread(this).start();
 	}
 	
+	/*
+	 * (non-Javadoc)
+	 * @see test.Byzantine_OM_Interface#startAlgorithm(boolean, int)
+	 */
 	public void startAlgorithm(boolean Order, int numfaulty){
 		Message msg = new Message(index, Order, numfaulty, type.MSG);
 		for(int i=0; i<numProcesses; i++){
@@ -100,11 +129,29 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				}
 			}
 		}
-	}
-	@Override
+		while(finalPro + finalCon < numProcesses - numfaulty - 1){
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+		System.out.println("excution finished!\n" + "The commander is: " + fault + "\nand the initial value is: " + 
+				Order +" \n" + "the correct process's number(exclude the commander): " + (numProcesses - numfaulty -1) + "\nand " + 
+				finalPro + " made the decition: TRUE");
+		}
+	
+	
+	/**
+	 * invoked by the run method in the inner class receiveProcess
+	 * they cooperate with each other to simulate round execution algorithm
+	 * @author Si Li
+	 */
 	public void run() {
+		//execute numfaulty rounds
 		while(round < numfaulty + 1){
-			while(numExpected > counter){
+			//wait for expected messages from other processes
+			while(numExpected > counter && (System.currentTimeMillis() - pre_time_MSG < 2000)){
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException e) {
@@ -112,15 +159,8 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				}
 			}
 			
-			while(System.currentTimeMillis() - pre_time < 3000){
-				try {
-					Thread.sleep(500);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
 			Message ackMsg = new Message(type.ACK, round);
-			
+			//send ACK to the rest of process indicating that next round can be started
 			for(int i=0; i<numProcesses; i++)
 				if(i != index)
 					try {
@@ -128,20 +168,10 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 					} catch (RemoteException e) {
 						e.printStackTrace();
 					}
-			//System.out.println("now is round: " + round + " from "+ index + "numToReceive:"+ numToReceive);
-			while(numToReceive > numfaulty + 2){
-				//System.out.println("numToReceive: " + numToReceive+ "  numExpected:" + numExpected +" "+ index);
+			//wait for enough ACK from other process
+			while(numToReceive > numfaulty + 2 && (System.currentTimeMillis() - pre_time_ACK < 2000)){
 				try {
 					Thread.sleep(200);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-			
-			//System.out.println("round: " + round+ "  numExpected:" + numExpected);
-			while(System.currentTimeMillis() - pre_time < 3000){
-				try {
-					Thread.sleep(500);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -172,10 +202,19 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				set = false;
 			}
 			
-			System.out.println("round: " + round+ "  numExpected:" + numExpected +" "+ index);
-			
 		}
-		System.out.println("decision: " + majority(decision_tree)+ " is made by process:" + index);
+		if(fault != faultyType.RAN){
+			finalDecision  = majority(decision_tree);
+			System.out.println("decision: " + finalDecision+ " is made by process:" + index);
+			try {
+				getProcess(urls.get(decision_tree.getId().get(0))).report();
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		else {
+			System.out.println("Random decision: " + ThreadLocalRandom.current().nextBoolean() + " by " + index);
+		}
 	}
 	
 	private class receiveProcess implements Runnable{
@@ -188,7 +227,14 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 		}
 		
 		
-	
+		/**
+		 * this method deal with the incoming messages
+		 * when it's {@MSG}
+		 * set the node of the tree, and increase the counter
+		 * when it's {@ACK}
+		 * reduce the numToReceive 
+		 * @author Si Li
+		 */
 		public void run() {
 			if(fault != faultyType.AFK){
 			type msgtype = msg.getType();
@@ -197,7 +243,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			case MSG:
 				List<Integer> localSq = new ArrayList<Integer>(msg.getSequence());
 				//refresh current time when receiving new message
-				pre_time = System.currentTimeMillis();
+				pre_time_MSG = System.currentTimeMillis();
 				if(localSq.size() == 1){
 					numfaulty = msg.getNumFaulty();
 					//create local tree
@@ -219,6 +265,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 					TreeNode currNode = findNode(localSq, decision_tree, 1);
 					currNode.setData(new NodeData(msg.getOrder()));
 				}
+				//if this message comes from the next round, pend it
 				while(round < localSq.size() - 1){
 					try {
 						Thread.sleep(200);
@@ -228,7 +275,6 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				}
 				synchronized(lock){
 					counter++;
-				//	System.out.println("counter: "+counter +" index "+ index +"local sq: " + localSq);
 				}
 
 				while(!set){
@@ -238,33 +284,31 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 						e.printStackTrace();
 					}
 				}
-				//System.out.println("Sending to " + index + "sendcounter: "+ sendCounter);
+			
 				msg.add_id(index);
 				if(fault == faultyType.RAN){
 					msg.setOrder(ThreadLocalRandom.current().nextBoolean());
 				}
-				//System.out.println("curr_index: " + index + "Sequence is:" + localSq);
+				//check if it's the last round
 				if(localSq.size() <= numfaulty){
+					//iterate the processes that are not act as commander
 					for(int i=0; i<numProcesses; i++){
-						
 						if(i!=index && !localSq.contains(i)){
 							Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
 							try {
-								
 								remoteProcess.receive(msg, delay);
 								sendCounter++;
-								
 							} catch (RemoteException e) {
 								e.printStackTrace();
 							}
 						}
 					}
 				}
-				//System.out.println("numSend: " + numSend +" by " + index + "sequnce" + localSq);
 				break;
-			//if it's the signal to enter next round
+			// ACK from other process
 			case ACK:
 				int curr_round = msg.getRound();
+				pre_time_MSG = System.currentTimeMillis();
 				while(curr_round > round){
 					try {
 						Thread.sleep(200);
@@ -274,25 +318,14 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				}
 				synchronized(lock){
 					numToReceive--;
-					//System.out.println("numTiReceive: " + numToReceive + " by " + index + "@round" + round);
 				}
 			}
 			}
 		}
-
-
-
-		private int factorial(int i) {
-			if(i < 0){
-				throw new IllegalArgumentException("x must be>=0");
-			}
-			if(i == 1)
-				return 1;
-			else return i * factorial(i-1);
-		}
 	}	
 	
 	protected void createTree(int current_round, TreeNode node){
+		//directly create child node
 		for(int i=0; i<numProcesses; i++)
 			if(i!=index && !node.getId().contains(i)){
 				List<Integer> newid = new ArrayList<Integer>(node.getId());
@@ -300,17 +333,21 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				TreeNode newchild = new TreeNode(newid, null, null, new NodeData(defaultOrder));
 				TreeNode.appendAsChild(newchild, node);
 				if(current_round!=0)
+					//for every child node, recursively execute this method
 					createTree(current_round-1, newchild);
 			}
 					
 	}
 	
 	private TreeNode findNode(List<Integer> sq, TreeNode node, int level){
-		//System.out.println("Now searching the node " + node.getId());
+		//get the copy of the sequence
 		List<Integer> localSq = new ArrayList<Integer>(sq);
-		TreeNode nextNode = TreeNode.search(localSq.subList(0, level), node);		
+		//search only this level and it's children, get partially matched node
+		TreeNode nextNode = TreeNode.search(localSq.subList(0, level), node);
+		//if the size matches
 		if(level == sq.size())
 			return nextNode;
+		//else go to next level
 		else return findNode(localSq, nextNode, level+1);
 	}
 	
@@ -334,7 +371,6 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 		else{			
 			for(TreeNode m: node.getChildren()){
 				if(m != null){
-				//System.out.println(m.getId());
 				printWholeTree(m);
 				}
 			}
@@ -349,9 +385,12 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			pro++;
 		else con++;
 		
+		//if it's leaf, return the value at once
 		if(node.isLeaf())
 			return node.getData().getOrder();
 		else {
+			//if not leaf, iterate all the children of the node
+			//and recursively apply this method on each of them
 			for(TreeNode m: node.getChildren())
 				if(majority(m))
 					pro++;
@@ -365,6 +404,28 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			else return defaultOrder;
 		}
 	}
-	
 
+
+
+	/**
+	 * when finished, report to the initial process
+	 */
+	public void report() throws RemoteException {
+		new Thread(new report(finalDecision)).start();
+	}
+	
+	class report implements Runnable {
+		private boolean order;
+		public report(boolean order){
+			this.order = order;
+		}
+		
+		synchronized public void run() {
+			if(order)
+			finalPro++;
+			else finalCon++;
+			//System.out.println("final" + finalCount);
+		}
+	}
+	
 }
