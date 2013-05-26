@@ -8,7 +8,6 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.*;
 
 import tree.NodeData;
 import tree.TreeNode;
@@ -16,6 +15,7 @@ import tree.TreeNode;
 import java.rmi.*;
 
 import message.Message;
+import message.Message.type;
 
 public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_Interface, Runnable {
 
@@ -40,24 +40,23 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 	
 	private int numfaulty;
 	
-	private int numReceived = 0;
+	private int numToReceive;
 	
 	private int numExpected = 1;
 	
-	//indicate whether round status are set or not 
-	private boolean set = false;
-	//private int round;
+	private int numSend;
 	
-	//indicate whether the tree is constructed or not
-	//private boolean initial = false;
+	private int round = 0;
 	
 	private byte[]  lock= new byte[0];
 	
-	//private Runnable action = new 
+	private long pre_time;
 	
-	private CyclicBarrier barrier;  
+	private final Byzantine_OM outer = this;
 	
-	private CountDownLatch startSignal;
+	private boolean set = false;
+	
+	private int counter = 0;
 	
 	public Byzantine_OM (List<String> urls, int index) throws RemoteException{
 			//get the processes' list
@@ -65,15 +64,90 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			//get the index of this process
 			this.index = index;
 			//get the total number of processes
-			this.numProcesses = urls.size();	
+			this.numProcesses = urls.size();
+			
+			this.numToReceive = this.numProcesses;
 	}
 	
 
 	@Override
 	public void run() {
-		// TODO Auto-generated method stub
-		System.out.println("I'm here!");
+		while(round < numfaulty + 1){
+			while(numExpected > counter){
+				try {
+					Thread.sleep(200);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			//System.out.println("round: " + round+ "  numExpected:" + numExpected);
+			while(System.currentTimeMillis() - pre_time < 2000){
+				try {
+					Thread.sleep(500);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			Message ackMsg = new Message(type.ACK, round);
+			
+			for(int i=0; i<numProcesses; i++)
+				if(i != index)
+					try {
+						getProcess(urls.get(i)).receive(ackMsg, 0);
+					} catch (RemoteException e) {
+						e.printStackTrace();
+					}
+			
+			while(numToReceive > numfaulty + 1){
+				try {
+					Thread.sleep(200);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			//System.out.println("round: " + round+ "  numExpected:" + numExpected);
+			while(System.currentTimeMillis() - pre_time < 2000){
+				try {
+					Thread.sleep(500);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			
+			synchronized(lock){
+				round++;
+				numExpected = numExpected*(numProcesses - 1 - round - numfaulty);
+				numToReceive = numProcesses;
+				counter = 0;
+				set = true;
+			}
+			
+			
+			
+			/*numSend = numReceived;
 		
+			//System.out.println("numSend: " + numSend );
+			synchronized(lock){
+				round++;
+				numExpected = numExpected*(numProcesses - 1 - round - numfaulty);
+				numReceived = 0;
+				set = true;
+			}
+			System.out.println("now is round: " + round + " from "+ index);
+			//wait for all the send to be completed
+			if(round != numfaulty){
+				while(numSend > 0){
+					try {
+						Thread.sleep(200);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				set = false;
+			}	*/
+			//System.out.println("now is round: " + round + " from "+ index);
+		}
+		System.out.println("decision: " + majority(decision_tree)+ " is made by process:" + index);
 	}
 
 	public void receive(Message msg, int setDelay) throws RemoteException {
@@ -82,7 +156,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 	}
 	
 	public void startAlgorithm(boolean Order){
-		Message msg = new Message(index, Order, 2);
+		Message msg = new Message(index, Order, 1, type.MSG);
 		for(int i=0; i<numProcesses; i++){
 			if(i != index){
 				Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
@@ -110,46 +184,79 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 		
 	
 		public void run() {
-			List<Integer> localSq = new ArrayList<Integer>(msg.getSequence());
-			
-			if(localSq.size() == 1){
-				numfaulty = msg.getNumFaulty();
-				NodeData root = new NodeData(msg.getOrder());
-				
-				decision_tree = new TreeNode(localSq, null, null, root);
-				createTree(numfaulty-1, decision_tree);
-				if(index == 1)
-				printWholeTree(decision_tree);
-				  
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
+			type msgtype = msg.getType();
+			switch (msgtype){
+			//if it's real message, change the corresponding node in the tree 
+			case MSG:
+				List<Integer> localSq = new ArrayList<Integer>(msg.getSequence());
+				//refresh current time when receiving new message
+				pre_time = System.currentTimeMillis();
+				if(localSq.size() == 1){
+					numfaulty = msg.getNumFaulty();
+					//create local tree
+					NodeData root = new NodeData(msg.getOrder());
+					decision_tree = new TreeNode(localSq, null, null, root);
+					createTree(numfaulty-1, decision_tree);
+					if(index == 1)
+					printWholeTree(decision_tree);
+					try {
+						Thread.sleep(1000);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					} 
+					//start the thread to deal with the incoming message
+					new Thread(outer).start(); 
 				}
-			}
-			else{
-				TreeNode currNode = findNode(localSq, decision_tree, 1);
-				//System.out.println("local Sq:"+ localSq + "Current Node:" + currNode + ", Order:" + msg.getOrder() + index);
-				currNode.setData(new NodeData(msg.getOrder()));
-			}
+				else{
+					//set corresponding node to the received value
+					TreeNode currNode = findNode(localSq, decision_tree, 1);
+					currNode.setData(new NodeData(msg.getOrder()));
+				}
 				
-			msg.add_id(index);
-			//System.out.println("curr_index: " + index + "Sequence is:" + localSq);
-			if(localSq.size() <= numfaulty){
-				for(int i=0; i<numProcesses; i++){
-					if(i!=index && !localSq.contains(i)){
-						Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
-						try {
-							//System.out.println("Sending to " + index + "Sequence is:" + sequence);
-							remoteProcess.receive(msg, delay);
-						} catch (RemoteException e) {
-							e.printStackTrace();
+				synchronized(lock){
+					counter++;
+				}
+
+				while(!set){
+					try {
+						Thread.sleep(200);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				
+				msg.add_id(index);
+				//System.out.println("curr_index: " + index + "Sequence is:" + localSq);
+				if(localSq.size() <= numfaulty){
+					for(int i=0; i<numProcesses; i++){
+						if(i!=index && !localSq.contains(i)){
+							Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
+							try {
+								//System.out.println("Sending to " + index + "Sequence is:" + sequence);
+								remoteProcess.receive(msg, delay);
+							} catch (RemoteException e) {
+								e.printStackTrace();
+							}
 						}
 					}
 				}
-			}
-			else if(localSq.size() == numfaulty + 1){
-				System.out.println(majority(decision_tree)+ "by process:" + index);
+				//System.out.println("numSend: " + numSend +" by " + index + "sequnce" + localSq);
+				break;
+			//if it's the signal to enter next round
+			case ACK:
+				int curr_round = msg.getRound();
+				//check if it's the current round's ACK
+				while(curr_round != round){
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				synchronized(lock){
+					numToReceive--;
+					//System.out.println("numReceived: " + numReceived + " by " + index + "@round" + round);
+				}
 			}
 		}
 

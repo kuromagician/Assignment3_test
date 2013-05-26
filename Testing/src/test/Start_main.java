@@ -23,7 +23,7 @@ public class Start_main {
 	private TreeNode decision_tree;
 	
 	
-	public  void test1(){
+	/*public  void test1(){
 		List<List<Integer>> d_list;
 		List<Integer> id = new ArrayList<Integer>(1);
 		id.add(1);
@@ -46,7 +46,7 @@ public class Start_main {
 
 		TreeNode.appendAsChild(child_node1, decision_tree);
 		TreeNode.appendAsChild(child_node2, child_node1);
-	}
+	}*/
 	
 	public  void verify(){
 		
@@ -84,6 +84,8 @@ public class Start_main {
                 try {
 					Naming.bind(urls.get(i), process); 
 					processList.add(process);
+					//newThread = new Thread(process);
+					
 				} catch (MalformedURLException e) {
 					e.printStackTrace();
 				} catch (AlreadyBoundException e) {
