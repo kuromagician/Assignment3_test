@@ -96,15 +96,9 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			}
 		}
 	}
-	/*protected class createBarrier implements Runnable{
-
-		public void run() {
-			barrier = new();
-		}
-		
-	}*/
 	
-	public class receiveProcess implements Runnable{
+	
+	private class receiveProcess implements Runnable{
 		private Message msg;
 		private int delay;
 		
@@ -126,7 +120,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				createTree(numfaulty-1, decision_tree);
 				if(index == 1)
 				printWholeTree(decision_tree);
-				startSignal = new CountDownLatch(1);  
+				  
 				try {
 					Thread.sleep(1000);
 				} catch (InterruptedException e) {
@@ -138,58 +132,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 				//System.out.println("local Sq:"+ localSq + "Current Node:" + currNode + ", Order:" + msg.getOrder() + index);
 				currNode.setData(new NodeData(msg.getOrder()));
 			}
-			startSignal.countDown();
-			try {
-				if(startSignal.await(5, TimeUnit.SECONDS));
-					
-			} catch (InterruptedException e1) {
-				e1.printStackTrace();
-			}
-			
-			synchronized(lock){
-					numExpected = numExpected * ( numProcesses - 1 - msg.getSequence().size());
-					System.out.println("numExpected:" + numExpected);
-				numReceived++;
-			}
-			startSignal = new CountDownLatch(numExpected);
-			
-			
-			
-			/*synchronized(lock){
-				if(numReceived == 0){
-					set = true;
-					numExpected = numExpected * msg.getSequence().size();
-					System.out.println("numExpected:" + numExpected);
-				}	
-				numReceived++;
-			}
-			
-			while((numReceived < numExpected) || set == false){
-				try {
-					Thread.sleep(200);
-				} catch (InterruptedException e) {
-					// 
-					e.printStackTrace();
-				}
-			}
-			
-			synchronized(lock){
-				if(set){
-					numReceived = 0;
-					set = false;
-				}
-			}
-			
-			try {
-				Thread.sleep(200);
-			} catch (InterruptedException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}*/
-			//add the local id to the message
-		
 				
-			
 			msg.add_id(index);
 			//System.out.println("curr_index: " + index + "Sequence is:" + localSq);
 			if(localSq.size() <= numfaulty){
