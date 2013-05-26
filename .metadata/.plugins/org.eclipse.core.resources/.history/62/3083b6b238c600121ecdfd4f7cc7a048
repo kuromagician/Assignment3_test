@@ -58,13 +58,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 	
 	private int counter = 0;
 	
-	private int sendCounter = 0;
-	
-	public enum faultyType {NOR, AFK, RAN}; 
-	
-	private faultyType fault;
-	
-	public Byzantine_OM (List<String> urls, int index, faultyType fault) throws RemoteException{
+	public Byzantine_OM (List<String> urls, int index) throws RemoteException{
 			//get the processes' list
 			this.urls = urls;
 			//get the index of this process
@@ -73,33 +67,9 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			this.numProcesses = urls.size();
 			
 			this.numToReceive = this.numProcesses;
-			
-			this.fault = fault;
 	}
 	
 
-	
-
-	public void receive(Message msg, int setDelay) throws RemoteException {
-		new Thread(new receiveProcess(msg, setDelay)).start();
-		//new Thread(this).start();
-	}
-	
-	public void startAlgorithm(boolean Order){
-		Message msg = new Message(index, Order, 2, type.MSG);
-		for(int i=0; i<numProcesses; i++){
-			if(i != index){
-				Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
-				try {
-					//System.out.println("sending to " + urls.get(i) +"\n msg:" + msg.getSequence());
-					remoteProcess.receive(msg, 0);
-				} catch (RemoteException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-		}
-	}
 	@Override
 	public void run() {
 		while(round < numfaulty + 1){
@@ -110,7 +80,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 					e.printStackTrace();
 				}
 			}
-			//System.out.println("now is round: " + round + " from "+ index + "numfalty:"+ numfaulty);
+			
 			while(System.currentTimeMillis() - pre_time < 2000){
 				try {
 					Thread.sleep(500);
@@ -129,14 +99,14 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 					}
 			
 			while(numToReceive > numfaulty + 1){
-				//System.out.println("numToReceive: " + numToReceive+ "  numExpected:" + numExpected +" "+ index);
+				System.out.println("numToReceive: " + numToReceive+ "  numExpected:" + numExpected +" "+ index);
 				try {
 					Thread.sleep(200);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 			}
-			
+			System.out.println("round: " + round+ "  numExpected:" + numExpected +" "+ index);
 			//System.out.println("round: " + round+ "  numExpected:" + numExpected);
 			while(System.currentTimeMillis() - pre_time < 2000){
 				try {
@@ -148,34 +118,38 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			
 			synchronized(lock){
 				round++;
-				numExpected = numExpected*(numProcesses - round - 1);
+				numExpected = numExpected*(numProcesses - 1 - round - numfaulty);
 				numToReceive = numProcesses;
 				counter = 0;
-				sendCounter = 0;
 				set = true;
 			}
 			
-			if(round < numfaulty){
-				while(sendCounter <= numExpected){
-					try {
-						Thread.sleep(200);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-				try {
-					Thread.sleep(500);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-				set = false;
-			}
-			
-			System.out.println("round: " + round+ "  numExpected:" + numExpected +" "+ index);
-			
+			//System.out.println("now is round: " + round + " from "+ index);
 		}
 		System.out.println("decision: " + majority(decision_tree)+ " is made by process:" + index);
 	}
+
+	public void receive(Message msg, int setDelay) throws RemoteException {
+		new Thread(new receiveProcess(msg, setDelay)).start();
+		//new Thread(this).start();
+	}
+	
+	public void startAlgorithm(boolean Order){
+		Message msg = new Message(index, Order, 1, type.MSG);
+		for(int i=0; i<numProcesses; i++){
+			if(i != index){
+				Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
+				try {
+					//System.out.println("sending to " + urls.get(i) +"\n msg:" + msg.getSequence());
+					remoteProcess.receive(msg, 0);
+				} catch (RemoteException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	
 	
 	private class receiveProcess implements Runnable{
 		private Message msg;
@@ -217,16 +191,10 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 					TreeNode currNode = findNode(localSq, decision_tree, 1);
 					currNode.setData(new NodeData(msg.getOrder()));
 				}
-				while(round < localSq.size() - 1){
-					try {
-						Thread.sleep(200);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
+				
 				synchronized(lock){
 					counter++;
-				//	System.out.println("counter: "+counter +" index "+ index +"local sq: " + localSq);
+					System.out.println(counter +" index "+ index);
 				}
 
 				while(!set){
@@ -236,19 +204,16 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 						e.printStackTrace();
 					}
 				}
-				//System.out.println("Sending to " + index + "sendcounter: "+ sendCounter);
+				
 				msg.add_id(index);
 				//System.out.println("curr_index: " + index + "Sequence is:" + localSq);
 				if(localSq.size() <= numfaulty){
 					for(int i=0; i<numProcesses; i++){
-						
 						if(i!=index && !localSq.contains(i)){
 							Byzantine_OM_Interface remoteProcess = getProcess(urls.get(i));
 							try {
-								
+								//System.out.println("Sending to " + index + "Sequence is:" + sequence);
 								remoteProcess.receive(msg, delay);
-								sendCounter++;
-								
 							} catch (RemoteException e) {
 								e.printStackTrace();
 							}
@@ -260,10 +225,17 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			//if it's the signal to enter next round
 			case ACK:
 				int curr_round = msg.getRound();
-				
+				//check if it's the current round's ACK
+				/*while(curr_round != round){
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}*/
 				synchronized(lock){
 					numToReceive--;
-					//System.out.println("numTiReceive: " + numToReceive + " by " + index + "@round" + round);
+					System.out.println("numTiReceive: " + numToReceive + " by " + index + "@round" + round);
 				}
 			}
 		}

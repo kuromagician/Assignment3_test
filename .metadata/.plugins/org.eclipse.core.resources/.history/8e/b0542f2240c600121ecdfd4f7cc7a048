@@ -60,11 +60,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 	
 	private int sendCounter = 0;
 	
-	public enum faultyType {NOR, AFK, RAN}; 
-	
-	private faultyType fault;
-	
-	public Byzantine_OM (List<String> urls, int index, faultyType fault) throws RemoteException{
+	public Byzantine_OM (List<String> urls, int index) throws RemoteException{
 			//get the processes' list
 			this.urls = urls;
 			//get the index of this process
@@ -73,8 +69,6 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			this.numProcesses = urls.size();
 			
 			this.numToReceive = this.numProcesses;
-			
-			this.fault = fault;
 	}
 	
 
@@ -148,7 +142,7 @@ public class Byzantine_OM extends UnicastRemoteObject implements Byzantine_OM_In
 			
 			synchronized(lock){
 				round++;
-				numExpected = numExpected*(numProcesses - round - 1);
+				numExpected = numExpected*(numProcesses - round -1);
 				numToReceive = numProcesses;
 				counter = 0;
 				sendCounter = 0;
