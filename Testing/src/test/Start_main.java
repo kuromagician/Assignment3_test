@@ -5,6 +5,7 @@ import java.util.*;
 
 import message.Message;
 
+import test.Byzantine_OM.faultyType;
 import tree.NodeData;
 import tree.TreeNode;
 
@@ -21,32 +22,11 @@ public class Start_main {
 	 * @param args
 	 */
 	private TreeNode decision_tree;
+	private static faultyType fault = faultyType.RAN;
+	private static int numfaulty = 3;
+	private static int numProcess = 20; 
 	
 	
-	/*public  void test1(){
-		List<List<Integer>> d_list;
-		List<Integer> id = new ArrayList<Integer>(1);
-		id.add(1);
-		Message msg = new Message(1, true, 0);
-		d_list = new ArrayList<List<Integer>>(9);
-		List<Integer> inside_list1 = new ArrayList<Integer>(2);
-		//List<Integer> inside_list2 = new ArrayList<Integer>(3);
-		List<Integer> inside_list3 = new LinkedList<Integer>();
-		inside_list1.add(0,1);
-		d_list.add(0,inside_list1);
-		System.out.println("The output is " + d_list.get(0).get(0));
-		System.out.println("The output is " + inside_list3.size());
-		//int numfaulty = msg.getNumFaulty();
-		NodeData root = new NodeData(msg.getOrder());
-		decision_tree = new TreeNode(msg.getSequence(), null, null, root);
-		NodeData children1 = new NodeData(false);
-		NodeData children2 = new NodeData(false);
-		TreeNode child_node1 = new TreeNode(msg.getSequence(), null, null, children1);
-		TreeNode child_node2 = new TreeNode(msg.getSequence(), null, null, children2);
-
-		TreeNode.appendAsChild(child_node1, decision_tree);
-		TreeNode.appendAsChild(child_node2, child_node1);
-	}*/
 	
 	public  void verify(){
 		
@@ -61,14 +41,40 @@ public class Start_main {
 	
 	public static void main(String[] args) {
 		
+		if(args.length == 0)
+			System.out.println("Use default settings: \n" +
+					"10 processes and 1 faulty process with AFK faulty");
+		else {
+			for(int i=0; i<args.length; i++){
+		
+				if(args[i].equals("-f")){
+					i++;
+					if(args[i].equals("AFK"))
+						fault = faultyType.AFK;
+					else if(args[i].equals("RAN"))
+						fault = faultyType.RAN;
+				}
+				else if(args[i].equals("-n")){
+					i++;
+					numProcess = Integer.parseInt(args[i].toString());
+				}
+				else if(args[i].equals("-e")){
+					i++;
+					numfaulty = Integer.parseInt(args[i].toString());
+				}
+			}
+			System.out.println("Use following settings: \n" +
+					numProcess + " processes and "+ numfaulty + " faulty process with " + fault + " faulty");
+		}
 		try {
 			LocateRegistry.createRegistry(1099);
 		} catch (RemoteException e) {
 			e.printStackTrace();
 		}
 		
+	int i = 0;	
 	List<String> urls = new ArrayList<String>();
-	for(int i=0; i<8; i++){
+	for(i=0; i<numProcess; i++){
 		String curr_url = "rmi://localhost/process" + i;
 		urls.add(curr_url);
 	}
@@ -78,14 +84,29 @@ public class Start_main {
 		processList = new ArrayList<Byzantine_OM_Interface>(urls.size());
 		Byzantine_OM_Interface process;
 		
-		for(int i = 0; i < urls.size(); i++) {
+		for(i = 0; i < urls.size() - numfaulty; i++) {
 			try {
-				process = new Byzantine_OM (urls, i);
+				process = new Byzantine_OM (urls, i, faultyType.NOR);
                 try {
 					Naming.bind(urls.get(i), process); 
 					processList.add(process);
-					//newThread = new Thread(process);
-					
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				} catch (AlreadyBoundException e) {
+					e.printStackTrace();
+				}
+               
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		for(; i < urls.size(); i++) {
+			try {
+				process = new Byzantine_OM (urls, i, fault);
+                try {
+					Naming.bind(urls.get(i), process); 
+					processList.add(process);
 				} catch (MalformedURLException e) {
 					e.printStackTrace();
 				} catch (AlreadyBoundException e) {

@@ -9,7 +9,7 @@ public interface Byzantine_OM_Interface extends Remote  {
 	
 	public void receive(Message msg, int setDelay) throws RemoteException;
 	
-	public void startAlgorithm (boolean order) throws RemoteException;
+	public void startAlgorithm (boolean order, int numFaulty) throws RemoteException;
 
 	//public void start();
 

@@ -61,5 +61,9 @@ public class Message implements Serializable{
 	public int getRound(){
 		return round;
 	}
+	
+	public void setOrder(boolean Order){
+		order = Order;
+	}
 
 }

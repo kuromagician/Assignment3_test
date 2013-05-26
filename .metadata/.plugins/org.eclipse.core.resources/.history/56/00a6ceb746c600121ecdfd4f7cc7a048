@@ -1,0 +1,138 @@
+package test;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.util.*;
+
+import message.Message;
+
+import test.Byzantine_OM.faultyType;
+import tree.NodeData;
+import tree.TreeNode;
+
+import java.net.MalformedURLException;
+import java.rmi.AlreadyBoundException;
+import java.rmi.Naming;
+import java.rmi.NotBoundException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Start_main {
+
+	/**
+	 * @param args
+	 */
+	private TreeNode decision_tree;
+	private static faultyType fault = faultyType.AFK;
+	private static int numfaulty = 1;
+	private static int numProcess = 10;; 
+	
+	
+	
+	public  void verify(){
+		
+		for(TreeNode  node: decision_tree.getChildren() )
+			System.out.println(node.toString() +" "+ node.getChildren());	
+	}
+
+	/**
+	 * this main create all the processes and register them
+	 */
+	private static List<Byzantine_OM_Interface> processList;
+	
+	public static void main(String[] args) {
+		
+		if(args.length == 0)
+			System.out.println("Use default settings: \n" +
+					"10 processes and 1 faulty process with AFK faulty");
+		else {
+			for(int i=0; i<args.length; i++){
+		
+				if(args[i].equals("-f")){
+					i++;
+					if(args[i].equals("AFK"))
+						fault = faultyType.AFK;
+					else if(args[i].equals("RAN"))
+						fault = faultyType.RAN;
+				}
+				else if(args[i].equals("-n")){
+					i++;
+					numProcess = Integer.parseInt(args[i].toString());
+				}
+				else if(args[i].equals("-e")){
+					i++;
+					numfaulty = Integer.parseInt(args[i].toString());
+				}
+			}
+			System.out.println("Use following settings: \n" +
+					numProcess + " processes and "+ numfaulty + " faulty process with" + fault + " faulty");
+		}
+		try {
+			LocateRegistry.createRegistry(1099);
+		} catch (RemoteException e) {
+			e.printStackTrace();
+		}
+		
+	int i = 0;	
+	List<String> urls = new ArrayList<String>();
+	for(i=0; i<numProcess; i++){
+		String curr_url = "rmi://localhost/process" + i;
+		urls.add(curr_url);
+	}
+	//System.out.println(urls);
+		
+		
+		processList = new ArrayList<Byzantine_OM_Interface>(urls.size());
+		Byzantine_OM_Interface process;
+		
+		for(i = 0; i < urls.size() - numfaulty; i++) {
+			try {
+				process = new Byzantine_OM (urls, i, faultyType.NOR);
+                try {
+					Naming.bind(urls.get(i), process); 
+					processList.add(process);
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				} catch (AlreadyBoundException e) {
+					e.printStackTrace();
+				}
+               
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		for(; i < urls.size(); i++) {
+			try {
+				process = new Byzantine_OM (urls, i, fault);
+                try {
+					Naming.bind(urls.get(i), process); 
+					processList.add(process);
+				} catch (MalformedURLException e) {
+					e.printStackTrace();
+				} catch (AlreadyBoundException e) {
+					e.printStackTrace();
+				}
+               
+			} catch (RemoteException e) {
+				e.printStackTrace();
+			}
+		}
+		
+		try {
+			Byzantine_OM_Interface process0 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process0");
+			Byzantine_OM_Interface process1 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process1");
+			Byzantine_OM_Interface process2 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process2");
+			Byzantine_OM_Interface process3 = (Byzantine_OM_Interface)Naming.lookup("rmi://localhost/process3");
+			
+			//new Thread(process0).start();
+			
+		} catch (MalformedURLException | RemoteException | NotBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+	}
+}
+
+
